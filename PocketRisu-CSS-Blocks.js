@@ -1,7 +1,7 @@
 //@name pkr_css_blocks
-//@display-name CSS 블록 관리
+//@display-name CSS 블록 관리 v0.2.1
 //@api 3.0
-//@version 0.2.0
+//@version 0.2.1
 //@update-url https://raw.githubusercontent.com/EXena1722/pocketrisu-css-blocks/main/PocketRisu-CSS-Blocks.js
 //@link https://github.com/EXena1722/pocketrisu-css-blocks 저장소
 
@@ -10,6 +10,8 @@
 // the top so browsers do not drop them.
 
 (async () => {
+  // Keep in sync with //@version and //@display-name above.
+  const VERSION = '0.2.1';
   const STORE_KEY = 'pkr_css_blocks_v1';
   const BACKUP_KEY = 'pkr_css_blocks_backup_v1';
 
@@ -209,7 +211,7 @@
     document.body.innerHTML = `
       <div class="win">
         <header>
-          <h1>[ CSS 블록 관리 ]</h1>
+          <h1>[ CSS 블록 관리 v${VERSION} ]</h1>
           <button id="add">[+ 블록]</button>
           <button id="import">[현재 CSS 가져오기]</button>
           <button id="toggle-preview">[합친 결과 보기]</button>
@@ -242,7 +244,7 @@
     document.getElementById('close').addEventListener('click', onClose);
   }
 
-  await risuai.registerSetting('CSS 블록 관리', async () => {
+  await risuai.registerSetting(`CSS 블록 관리 v${VERSION}`, async () => {
     // Ask for both permissions before showing the fullscreen iframe: the app's
     // consent dialog (z-index 50) would otherwise sit hidden behind the plugin
     // container (z-index 1000). Answers are remembered, so this asks only once.
