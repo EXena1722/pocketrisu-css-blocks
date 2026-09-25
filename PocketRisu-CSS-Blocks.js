@@ -1,7 +1,7 @@
 //@name pkr_css_blocks
-//@display-name CSS 블록 관리 v0.2.1
+//@display-name CSS 블록 관리 v0.2.2
 //@api 3.0
-//@version 0.2.1
+//@version 0.2.2
 //@update-url https://raw.githubusercontent.com/EXena1722/pocketrisu-css-blocks/main/PocketRisu-CSS-Blocks.js
 //@link https://github.com/EXena1722/pocketrisu-css-blocks 저장소
 
@@ -11,7 +11,7 @@
 
 (async () => {
   // Keep in sync with //@version and //@display-name above.
-  const VERSION = '0.2.1';
+  const VERSION = '0.2.2';
   const STORE_KEY = 'pkr_css_blocks_v1';
   const BACKUP_KEY = 'pkr_css_blocks_backup_v1';
 
@@ -174,39 +174,42 @@
   function buildUI() {
     // The app always sizes the plugin iframe to the whole screen, but the iframe
     // itself has no background: keep this page transparent, dim the app behind
-    // it, and draw a smaller centred window.
+    // it, and draw a window: 80% x 85% of large screens, the whole screen on phones.
     document.head.innerHTML = `<meta charset="utf-8"><style>
       @import url("https://cdn.jsdelivr.net/npm/d2coding@1.3.2/d2coding-full.css");
       :root { --bg:#101719; --header:#19272a; --line:#354c50; --text:#d1ddda; --muted:#8ba7a5; --accent:#80c9b7; --red:#ff5555; }
       * { box-sizing: border-box; font-family: 'D2Coding', Consolas, monospace; }
       [hidden] { display: none !important; }
-      html, body { margin: 0; height: 100%; background: transparent; color: var(--text); font-size: 14px; }
-      body { display: flex; align-items: center; justify-content: center; padding: 1.5rem; background: rgb(0 0 0 / .55); }
-      .win { display: flex; flex-direction: column; width: min(46rem, 100%); max-height: 100%;
+      html, body { margin: 0; height: 100%; background: transparent; color: var(--text); font-size: 16px; }
+      body { display: flex; align-items: center; justify-content: center; background: rgb(0 0 0 / .55); }
+      .win { display: flex; flex-direction: column; width: min(80%, 72rem); height: 85%;
              background: var(--bg); border: 1px solid var(--line); }
-      header { display: flex; flex-wrap: wrap; align-items: center; gap: .3rem 1ch;
-               padding: .5rem 1.5ch; border-bottom: 1px solid var(--line); }
-      header h1 { margin: 0 auto 0 0; font-size: .95rem; color: var(--accent); }
-      #status { width: 100%; color: var(--muted); font-size: .75rem; min-height: 1.1em; }
-      button { background: none; border: 0; color: var(--muted); cursor: pointer; padding: .15rem .5ch; font-size: .8rem; }
+      header { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem 1ch;
+               padding: .6rem 2ch; border-bottom: 1px solid var(--line); }
+      header h1 { margin: 0 auto 0 0; font-size: 1rem; color: var(--accent); }
+      #status { width: 100%; color: var(--muted); font-size: .8rem; min-height: 1.2em; }
+      button { background: none; border: 0; color: var(--muted); cursor: pointer; padding: .25rem .5ch; font-size: .9rem; }
       button:hover { background: var(--accent); color: var(--bg); }
       button.primary { color: var(--accent); }
       button.danger { color: var(--red); }
-      main { overflow-y: auto; padding: .7rem 1.5ch 1rem; display: flex; flex-direction: column; gap: .7rem; }
-      #list { display: flex; flex-direction: column; gap: .7rem; }
+      main { flex: 1; overflow-y: auto; padding: 1rem 2ch 1.5rem; display: flex; flex-direction: column; gap: 1rem; }
+      #list { display: flex; flex-direction: column; gap: 1rem; }
       .block { border: 1px solid var(--line); }
       .block.off { opacity: .55; }
-      .bar { display: flex; align-items: center; gap: .5ch; padding: .15rem 1ch; border-bottom: 1px solid var(--line); background: var(--header); }
-      .bar .title { flex: 1; min-width: 5rem; background: transparent; color: var(--text); border: 0; font-weight: 600; font-size: .85rem; }
+      .bar { display: flex; align-items: center; gap: 1ch; padding: .3rem 1ch; border-bottom: 1px solid var(--line); background: var(--header); }
+      .bar .title { flex: 1; min-width: 6rem; background: transparent; color: var(--text); border: 0; font-weight: 600; font-size: .95rem; }
       .bar .title:focus { outline: 1px solid var(--accent); }
       input[type=checkbox] { accent-color: var(--accent); margin: 0; }
-      textarea { display: block; width: 100%; height: 9rem; resize: vertical; margin: 0; padding: .4rem 1ch; border: 0;
-                 background: var(--bg); color: var(--text); font-size: .8rem; line-height: 1.45; tab-size: 2; }
+      textarea { display: block; width: 100%; height: 14rem; resize: vertical; margin: 0; padding: .6rem 1ch; border: 0;
+                 background: var(--bg); color: var(--text); font-size: .9rem; line-height: 1.5; tab-size: 2; }
       textarea:focus { outline: 1px solid var(--accent); }
-      #preview { border: 1px dashed var(--line); height: 12rem; color: var(--muted); }
+      #preview { border: 1px dashed var(--line); height: 18rem; color: var(--muted); }
       .empty { color: var(--muted); margin: 0; }
-      .note { color: var(--muted); font-size: .72rem; margin: 0; line-height: 1.5; }
-      @media (max-width: 600px) { body { padding: .5rem; } }
+      .note { color: var(--muted); font-size: .8rem; margin: 0; line-height: 1.5; }
+      @media (max-width: 600px) {
+        .win { width: 100%; height: 100%; border: 0; }
+        header, main { padding-left: 1ch; padding-right: 1ch; }
+      }
     </style>`;
     document.body.innerHTML = `
       <div class="win">
