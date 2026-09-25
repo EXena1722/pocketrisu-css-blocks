@@ -1,7 +1,7 @@
 //@name pkr_css_blocks
-//@display-name CSS 블록 관리 v0.2.5
+//@display-name CSS 블록 관리 v0.2.6
 //@api 3.0
-//@version 0.2.5
+//@version 0.2.6
 //@update-url https://raw.githubusercontent.com/EXena1722/pocketrisu-css-blocks/main/PocketRisu-CSS-Blocks.js
 //@link https://github.com/EXena1722/pocketrisu-css-blocks 저장소
 
@@ -11,7 +11,7 @@
 
 (async () => {
   // Keep in sync with //@version and //@display-name above.
-  const VERSION = '0.2.5';
+  const VERSION = '0.2.6';
   const STORE_KEY = 'pkr_css_blocks_v1';
   const BACKUP_KEY = 'pkr_css_blocks_backup_v1';
 
@@ -19,6 +19,9 @@
   let dirty = false;
   let edits = 0; // bumped on every change, so a slow save cannot clear newer edits
   let busy = false;
+  let loaded = false;
+  let shown = false;
+  let missedFailure = ''; // a failure that happened while the window was closed
 
   const newId = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
 
@@ -127,7 +130,7 @@
     setStatus(`${prefix} (${label})`);
     let slowTimer, timer;
     const timeout = new Promise((_, reject) => {
-      slowTimer = setTimeout(() => setStatus(`${prefix} (${label}) — 앱이 다른 저장을 끝내길 기다리는 중입니다. 창을 닫지 마세요`), STEP_SLOW_MS);
+      slowTimer = setTimeout(() => setStatus(`${prefix} (${label}) — 앱이 다른 저장을 끝내길 기다리는 중입니다. 창을 닫아도 저장은 계속됩니다`), STEP_SLOW_MS);
       timer = setTimeout(() => reject(new Error(`${STEP_TIMEOUT_MS / 1000}초 동안 응답이 없습니다`)), STEP_TIMEOUT_MS);
     });
     try {
@@ -143,7 +146,9 @@
 
   function reportFailure(e) {
     console.error('[CSS 블록 관리]', e);
-    setStatus(`실패: ${e.step || '알 수 없는'} 단계 — ${e.message || e}`);
+    const text = `실패: ${e.step || '알 수 없는'} 단계 — ${e.message || e}`;
+    if (!shown) missedFailure = text;
+    setStatus(text);
   }
 
   const timeNow = () => new Date().toLocaleTimeString();
@@ -238,7 +243,7 @@
   // One app operation at a time: a second [적용] while the first still waits
   // on the server would only queue behind it.
   async function exclusive(fn) {
-    if (busy) return;
+    if (busy) { setStatus('이전 작업이 아직 진행 중입니다. 끝난 뒤 다시 누르세요'); return; }
     busy = true;
     try { await fn(); } catch (e) { reportFailure(e); } finally { busy = false; }
   }
@@ -269,21 +274,14 @@
     setStatus(live ? `되돌림 (${timeNow()}) — 마지막 [적용] 이전 CSS, 블록 목록은 그대로` : `되돌림 저장됨 (${timeNow()}) — 새로고침 후 반영됩니다`);
   });
 
-  // Wait for any running [적용] instead of ignoring the click, then save
-  // unsaved edits and close; on failure stay open so nothing is lost.
-  let closing = false;
+  // Close at once: hideContainer only hides the iframe, so this script and
+  // any write it is waiting on keep running. Unsaved edits are saved after
+  // whatever is running; a failure is shown when the window opens next.
   async function onClose() {
-    if (closing) return;
-    closing = true;
-    try {
-      while (busy) await new Promise((r) => setTimeout(r, 200));
-      if (dirty) await save('닫는 중…');
-      await risuai.hideContainer();
-    } catch (e) {
-      reportFailure(e);
-    } finally {
-      closing = false;
-    }
+    shown = false;
+    await risuai.hideContainer();
+    while (busy) await new Promise((r) => setTimeout(r, 200));
+    if (dirty) await exclusive(() => save('저장 중…'));
   }
 
   function buildUI() {
@@ -371,7 +369,10 @@
 
     await risuai.showContainer('fullscreen');
     buildUI();
-    await load();
+    shown = true;
+    // Blocks stay in memory after the first open and are never older than the
+    // stored copy, which a save still waiting on the server may not have reached.
+    if (!loaded) { await load(); loaded = true; }
     // First run: start from whatever is in Custom CSS today.
     if (!blocks.length && current && current.trim()) {
       blocks.push(...blocksFromCSS(current));
@@ -381,8 +382,13 @@
       setStatus('데이터 접근 권한이 없습니다. [설정] > [플러그인]에서 이 플러그인의 "권한 응답 초기화" 후 다시 여세요');
     } else if (!rootDoc) {
       setStatus('화면 접근 권한이 없어 [적용] 후 새로고침해야 반영됩니다');
+    } else if (missedFailure) {
+      setStatus(`창을 닫은 뒤 ${missedFailure}`);
+    } else if (busy) {
+      setStatus('이전 저장이 아직 진행 중입니다…');
     } else {
       setStatus('');
     }
+    missedFailure = '';
   }, '🧩', 'html', 'pkr-css-blocks');
 })();
