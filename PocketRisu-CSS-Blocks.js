@@ -289,9 +289,10 @@
     // itself has no background: keep this page transparent, dim the app behind
     // it, and draw a window: 80% x 85% of large screens, the whole screen on phones.
     document.head.innerHTML = `<meta charset="utf-8"><style>
-      @import url("https://cdn.jsdelivr.net/npm/d2coding@1.3.2/d2coding-full.css");
       :root { --bg:#101719; --header:#19272a; --line:#354c50; --text:#d1ddda; --muted:#8ba7a5; --accent:#80c9b7; --red:#ff5555; }
-      * { box-sizing: border-box; font-family: 'D2Coding', Consolas, monospace; }
+      /* Installed fonts only, nothing downloaded: D2Coding if the device has it,
+         then each platform's own monospace font. */
+      * { box-sizing: border-box; font-family: 'D2Coding', ui-monospace, Menlo, Consolas, 'Cascadia Mono', 'Roboto Mono', 'Noto Sans Mono', 'Droid Sans Mono', monospace; }
       [hidden] { display: none !important; }
       html, body { margin: 0; height: 100%; background: transparent; color: var(--text); font-size: 16px; }
       body { display: flex; align-items: center; justify-content: center; background: rgb(0 0 0 / .55); }
