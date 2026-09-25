@@ -1,7 +1,7 @@
 //@name pkr_css_blocks
-//@display-name CSS 블록 관리 v0.2.2
+//@display-name CSS 블록 관리 v0.2.3
 //@api 3.0
-//@version 0.2.2
+//@version 0.2.3
 //@update-url https://raw.githubusercontent.com/EXena1722/pocketrisu-css-blocks/main/PocketRisu-CSS-Blocks.js
 //@link https://github.com/EXena1722/pocketrisu-css-blocks 저장소
 
@@ -11,7 +11,7 @@
 
 (async () => {
   // Keep in sync with //@version and //@display-name above.
-  const VERSION = '0.2.2';
+  const VERSION = '0.2.3';
   const STORE_KEY = 'pkr_css_blocks_v1';
   const BACKUP_KEY = 'pkr_css_blocks_backup_v1';
 
@@ -26,7 +26,8 @@
   }
 
   async function save() {
-    await risuai.pluginStorage.setItem(STORE_KEY, { blocks });
+    // The app reports a failed plugin-storage write by returning false, not by throwing.
+    if (await risuai.pluginStorage.setItem(STORE_KEY, { blocks }) === false) throw new Error('플러그인 저장소에 쓰지 못했습니다');
     dirty = false;
   }
 
@@ -56,14 +57,40 @@
   // Save to the database, then swap the live <style id="customcss"> so the
   // change shows without a reload (setDatabase alone does not re-inject CSS).
   async function applyCSS(css) {
-    await risuai.setDatabase({ customCSS: css });
-    const doc = await risuai.getRootDocument();
+    await step('Custom CSS 저장', risuai.setDatabase({ customCSS: css }));
+    const doc = await step('화면 접근', risuai.getRootDocument());
     if (!doc) return false;
-    const el = await doc.getElementById('customcss');
+    const el = await step('화면 반영', doc.getElementById('customcss'));
     if (!el) return false;
-    await el.setTextContent(css);
+    await step('화면 반영', el.setTextContent(css));
     return true;
   }
+
+  // Each app call runs over postMessage. Show which one is running, and fail
+  // with that name if it errors or never answers, instead of hanging silently.
+  const STEP_TIMEOUT_MS = 15000;
+  async function step(label, promise) {
+    setStatus(`적용 중… (${label})`);
+    let timer;
+    const timeout = new Promise((_, reject) => {
+      timer = setTimeout(() => reject(new Error('응답이 없습니다')), STEP_TIMEOUT_MS);
+    });
+    try {
+      return await Promise.race([promise, timeout]);
+    } catch (e) {
+      e.step = e.step || label;
+      throw e;
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  function reportFailure(e) {
+    console.error('[CSS 블록 관리]', e);
+    setStatus(`실패: ${e.step || '알 수 없는'} 단계 — ${e.message || e}`);
+  }
+
+  const timeNow = () => new Date().toLocaleTimeString();
 
   // ---------- UI (runs inside the plugin iframe) ----------
 
@@ -150,20 +177,30 @@
   }
 
   async function onApply() {
-    setStatus('적용 중…');
-    const prev = await readCustomCSS();
-    if (prev === null) { setStatus('데이터 접근 권한이 없어 적용하지 못했습니다. [설정] > [플러그인]에서 "권한 응답 초기화" 후 다시 여세요'); return; }
-    await risuai.pluginStorage.setItem(BACKUP_KEY, prev);
-    await save();
-    const live = await applyCSS(combine());
-    setStatus(live ? '적용됨' : '저장됨 — 화면 접근 권한이 없어 새로고침 후 반영됩니다');
+    try {
+      const prev = await step('현재 CSS 읽기', readCustomCSS());
+      if (prev === null) { setStatus('데이터 접근 권한이 없어 적용하지 못했습니다. [설정] > [플러그인]에서 "권한 응답 초기화" 후 다시 여세요'); return; }
+      if (await step('백업', risuai.pluginStorage.setItem(BACKUP_KEY, prev)) === false) {
+        throw Object.assign(new Error('플러그인 저장소에 쓰지 못했습니다'), { step: '백업' });
+      }
+      await step('블록 저장', save());
+      const live = await applyCSS(combine());
+      // The time makes a repeated [적용] visibly produce a new message.
+      setStatus(live ? `적용됨 (${timeNow()})` : `저장됨 (${timeNow()}) — 화면 접근 권한이 없어 새로고침 후 반영됩니다`);
+    } catch (e) {
+      reportFailure(e);
+    }
   }
 
   async function onRestore() {
-    const prev = await risuai.pluginStorage.getItem(BACKUP_KEY);
-    if (typeof prev !== 'string') { setStatus('되돌릴 이전 CSS가 없습니다'); return; }
-    const live = await applyCSS(prev);
-    setStatus(live ? '마지막 [적용] 이전 CSS로 되돌렸습니다 (블록 목록은 그대로)' : '되돌림 저장됨 — 새로고침 후 반영됩니다');
+    try {
+      const prev = await step('백업 읽기', risuai.pluginStorage.getItem(BACKUP_KEY));
+      if (typeof prev !== 'string') { setStatus('되돌릴 이전 CSS가 없습니다'); return; }
+      const live = await applyCSS(prev);
+      setStatus(live ? `되돌림 (${timeNow()}) — 마지막 [적용] 이전 CSS, 블록 목록은 그대로` : `되돌림 저장됨 (${timeNow()}) — 새로고침 후 반영됩니다`);
+    } catch (e) {
+      reportFailure(e);
+    }
   }
 
   async function onClose() {
