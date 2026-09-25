@@ -1,7 +1,7 @@
 //@name pkr_css_blocks
-//@display-name CSS 블록 관리 v0.2.4
+//@display-name CSS 블록 관리 v0.2.5
 //@api 3.0
-//@version 0.2.4
+//@version 0.2.5
 //@update-url https://raw.githubusercontent.com/EXena1722/pocketrisu-css-blocks/main/PocketRisu-CSS-Blocks.js
 //@link https://github.com/EXena1722/pocketrisu-css-blocks 저장소
 
@@ -11,7 +11,7 @@
 
 (async () => {
   // Keep in sync with //@version and //@display-name above.
-  const VERSION = '0.2.4';
+  const VERSION = '0.2.5';
   const STORE_KEY = 'pkr_css_blocks_v1';
   const BACKUP_KEY = 'pkr_css_blocks_backup_v1';
 
@@ -41,22 +41,66 @@
     return db ? (db.customCSS ?? '') : null;
   }
 
+  // Marker comments in the combined CSS, so it can be split back into blocks
+  // ([현재 CSS 가져오기]). Deliberately unusual so hand-written comments never match.
+  const blockMarker = (title) => `/*[[pkr-block: ${title}]]*/`;
+  const importMarker = (title) => `/*[[pkr-import: ${title}]]*/`;
+  const BLOCK_MARKER_RE = /^\/\*\[\[pkr-block: (.*)\]\]\*\/[ \t]*$/gm;
+  const TAGGED_IMPORT_RE = /^[ \t]*(@import\s[^;]*;)[ \t]*\/\*\[\[pkr-import: (.*)\]\]\*\/[ \t]*$/;
+  const IMPORT_LINE_RE = /^[ \t]*@import\s[^;]*;[ \t]*$/gm;
+  // A title must not close the comment or the marker early.
+  const markerTitle = (b) => (b.title || '제목 없음').replace(/\*\//g, '* /').replace(/\]\]/g, '] ]').replace(/[\r\n]+/g, ' ');
+
   // @import must precede every other rule, so pull them out of each block
-  // (only lines that start with @import, which skips most commented ones).
+  // (only lines that start with @import, which skips most commented ones) and
+  // tag each with the block it came from.
   function combine() {
     const imports = [];
+    const seen = new Set();
     const parts = [];
     for (const b of blocks) {
       if (!b.enabled) continue;
-      const body = b.css.replace(/^[ \t]*@import\s[^;]*;[ \t]*$/gm, (m) => {
+      const title = markerTitle(b);
+      const body = b.css.replace(IMPORT_LINE_RE, (m) => {
         const rule = m.trim();
-        if (!imports.includes(rule)) imports.push(rule);
+        if (!seen.has(rule)) { seen.add(rule); imports.push(`${rule} ${importMarker(title)}`); }
         return '';
       });
-      const title = (b.title || '제목 없음').replace(/\*\//g, '* /');
-      parts.push(`/* ===== ${title} ===== */\n${body.trim()}\n`);
+      parts.push(`${blockMarker(title)}\n${body.trim()}\n`);
     }
     return (imports.length ? imports.join('\n') + '\n\n' : '') + parts.join('\n');
+  }
+
+  // The reverse of combine(): one block per marker, with each tagged @import
+  // put back into its block. Anything before the first marker that is not a
+  // tagged @import (hand edits, CSS from before v0.2.5) becomes its own block.
+  // Returns null when the CSS has no markers.
+  function splitCSS(css) {
+    const text = css.replace(/\r\n?/g, '\n');
+    const heads = [...text.matchAll(BLOCK_MARKER_RE)];
+    if (!heads.length) return null;
+    const parts = heads.map((h, i) => ({
+      title: h[1],
+      imports: [],
+      css: text.slice(h.index + h[0].length, i + 1 < heads.length ? heads[i + 1].index : text.length).replace(/^\n/, '').trimEnd(),
+    }));
+    const lead = [];
+    for (const line of text.slice(0, heads[0].index).split('\n')) {
+      const tag = TAGGED_IMPORT_RE.exec(line);
+      const owner = tag && parts.find((p) => p.title === tag[2]);
+      if (owner) owner.imports.push(tag[1]);
+      else lead.push(tag ? tag[1] : line);
+    }
+    const out = parts.map((p) => ({ title: p.title, css: [...p.imports, p.css].filter(Boolean).join('\n') }));
+    const leadCSS = lead.join('\n').trim();
+    if (leadCSS) out.unshift({ title: '앞부분', css: leadCSS });
+    return out;
+  }
+
+  // Blocks for a Custom CSS value: split by markers, or one block if none.
+  function blocksFromCSS(css) {
+    const parts = splitCSS(css) || [{ title: '가져온 CSS', css }];
+    return parts.map((p) => ({ id: newId(), title: p.title, enabled: true, folded: false, css: p.css }));
   }
 
   // Save to the database, then swap the live <style id="customcss"> so the
@@ -184,9 +228,11 @@
     const css = await readCustomCSS();
     if (css === null) { setStatus('데이터 접근 권한이 없어 가져오지 못했습니다'); return; }
     if (!css.trim()) { setStatus('현재 Custom CSS가 비어 있습니다'); return; }
-    blocks.push({ id: newId(), title: '가져온 CSS', enabled: true, folded: false, css });
+    const added = blocksFromCSS(css);
+    blocks.push(...added);
     markDirty();
     render();
+    if (added.length > 1) setStatus(`블록 ${added.length}개로 나눠 가져왔습니다 — [적용]을 눌러야 반영됩니다`);
   }
 
   // One app operation at a time: a second [적용] while the first still waits
@@ -328,7 +374,7 @@
     await load();
     // First run: start from whatever is in Custom CSS today.
     if (!blocks.length && current && current.trim()) {
-      blocks.push({ id: newId(), title: '가져온 CSS', enabled: true, folded: false, css: current });
+      blocks.push(...blocksFromCSS(current));
     }
     render();
     if (current === null) {
