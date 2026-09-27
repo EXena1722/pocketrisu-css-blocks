@@ -347,6 +347,8 @@
       /* Menu in fixed rows: 1 on wide screens, 2 on medium, 3 on phones. */
       .menu { display: grid; grid-template-columns: repeat(6, auto); justify-content: start; gap: .2rem 1ch; }
       .menu button { text-align: left; }
+      /* Two-line labels on phones only (see the media query below). */
+      .menu br { display: none; }
       #status { color: var(--muted); font-size: .8rem; min-height: 1.2em; }
       button { background: none; border: 0; color: var(--muted); cursor: pointer; padding: .25rem .5ch; font-size: .9rem; }
       button:hover { background: var(--accent); color: var(--bg); }
@@ -376,7 +378,8 @@
       .note { color: var(--muted); font-size: .8rem; margin: 0; line-height: 1.5; }
       @media (max-width: 900px) { .menu { grid-template-columns: repeat(3, auto); } }
       @media (max-width: 600px) {
-        .menu { grid-template-columns: 1fr 1fr; }
+        .menu { grid-template-columns: 1fr 1fr; align-items: center; }
+        .menu br { display: inline; }
         .win { width: 100%; height: 100%; border: 0; }
         header, main { padding-left: 1ch; padding-right: 1ch; }
       }
@@ -387,9 +390,9 @@
           <h1>[ CSS 블록 관리 v${VERSION} ]</h1>
           <nav class="menu">
             <button id="add">[+ 블록]</button>
-            <button id="import">[현재 CSS 가져오기]</button>
+            <button id="import">[현재 CSS <br>가져오기]</button>
             <button id="toggle-preview">[합친 결과 보기]</button>
-            <button id="restore">[이전 CSS 되돌리기]</button>
+            <button id="restore">[이전 CSS <br>되돌리기]</button>
             <button id="apply" class="primary">[적용]</button>
             <button id="close">[닫기]</button>
           </nav>
