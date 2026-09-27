@@ -1,7 +1,7 @@
 //@name pkr_css_blocks
-//@display-name CSS 블록 관리 v0.2.6
+//@display-name CSS 블록 관리 v0.2.7
 //@api 3.0
-//@version 0.2.6
+//@version 0.2.7
 //@update-url https://raw.githubusercontent.com/EXena1722/pocketrisu-css-blocks/main/PocketRisu-CSS-Blocks.js
 //@link https://github.com/EXena1722/pocketrisu-css-blocks 저장소
 
@@ -11,7 +11,7 @@
 
 (async () => {
   // Keep in sync with //@version and //@display-name above.
-  const VERSION = '0.2.6';
+  const VERSION = '0.2.7';
   const STORE_KEY = 'pkr_css_blocks_v1';
   const BACKUP_KEY = 'pkr_css_blocks_backup_v1';
 
@@ -167,7 +167,7 @@
 
   function blockEl(b, i) {
     const wrap = document.createElement('section');
-    wrap.className = 'block' + (b.enabled ? '' : ' off');
+    wrap.className = 'block' + (b.enabled ? '' : ' off') + (b.folded ? ' folded' : '');
 
     const bar = document.createElement('div');
     bar.className = 'bar';
@@ -178,11 +178,21 @@
     en.title = '켜기/끄기';
     en.addEventListener('change', () => { b.enabled = en.checked; wrap.classList.toggle('off', !b.enabled); markDirty(); });
 
-    const title = document.createElement('input');
+    // The title is plain text: tapping it (or the bar around it) folds the
+    // block, and [제목 수정] swaps it for an input.
+    const fold = document.createElement('span');
+    fold.className = 'fold';
+    fold.textContent = b.folded ? '▸' : '▾';
+    const title = document.createElement('span');
     title.className = 'title';
-    title.value = b.title;
-    title.placeholder = '블록 제목';
-    title.addEventListener('input', () => { b.title = title.value; markDirty(); });
+    title.textContent = b.title || '제목 없음';
+    title.tabIndex = 0;
+    title.setAttribute('role', 'button');
+    title.title = b.folded ? '펼치기' : '접기';
+
+    const toggleFold = () => { b.folded = !b.folded; render(); };
+    bar.addEventListener('click', (e) => { if (!e.target.closest('button, input')) toggleFold(); });
+    title.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleFold(); } });
 
     const btn = (label, fn) => {
       const x = document.createElement('button');
@@ -191,9 +201,37 @@
       return x;
     };
 
+    let editor = null;
+    const finishEdit = (keep) => {
+      if (!editor) return;
+      const value = editor.value.trim();
+      editor = null;
+      if (keep && value !== b.title) { b.title = value; markDirty(); }
+      render();
+    };
+    const rename = btn('[제목 수정]', () => {
+      if (editor) { finishEdit(true); return; }
+      editor = document.createElement('input');
+      editor.className = 'title-edit';
+      editor.value = b.title;
+      editor.placeholder = '블록 제목';
+      editor.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') finishEdit(true);
+        else if (e.key === 'Escape') finishEdit(false);
+      });
+      editor.addEventListener('blur', () => finishEdit(true));
+      title.replaceWith(editor);
+      fold.hidden = true;
+      rename.textContent = '[완료]';
+      editor.focus();
+      editor.select();
+    });
+    // Keep the input focused when [완료] is pressed, so blur does not finish
+    // the edit first and the click then start a new one.
+    rename.addEventListener('pointerdown', (e) => { if (editor) e.preventDefault(); });
+
     const up = btn('[↑]', () => { if (i > 0) { [blocks[i - 1], blocks[i]] = [blocks[i], blocks[i - 1]]; markDirty(); render(); } });
     const down = btn('[↓]', () => { if (i < blocks.length - 1) { [blocks[i + 1], blocks[i]] = [blocks[i], blocks[i + 1]]; markDirty(); render(); } });
-    const fold = btn(b.folded ? '[펼치기]' : '[접기]', () => { b.folded = !b.folded; render(); });
 
     // Two-step delete instead of confirm(), which a sandboxed iframe may block.
     let armed = false;
@@ -202,7 +240,13 @@
       blocks.splice(i, 1); markDirty(); render();
     });
 
-    bar.append(en, title, up, down, fold, del);
+    const head = document.createElement('div');
+    head.className = 'head';
+    head.append(en, fold, title);
+    const tools = document.createElement('div');
+    tools.className = 'tools';
+    tools.append(rename, up, down, del);
+    bar.append(head, tools);
     wrap.append(bar);
 
     if (!b.folded) {
@@ -298,10 +342,12 @@
       body { display: flex; align-items: center; justify-content: center; background: rgb(0 0 0 / .55); }
       .win { display: flex; flex-direction: column; width: min(80%, 72rem); height: 85%;
              background: var(--bg); border: 1px solid var(--line); }
-      header { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem 1ch;
-               padding: .6rem 2ch; border-bottom: 1px solid var(--line); }
-      header h1 { margin: 0 auto 0 0; font-size: 1rem; color: var(--accent); }
-      #status { width: 100%; color: var(--muted); font-size: .8rem; min-height: 1.2em; }
+      header { display: flex; flex-direction: column; gap: .4rem; padding: .6rem 2ch; border-bottom: 1px solid var(--line); }
+      header h1 { margin: 0; font-size: 1rem; color: var(--accent); }
+      /* Menu in fixed rows: 1 on wide screens, 2 on medium, 3 on phones. */
+      .menu { display: grid; grid-template-columns: repeat(6, auto); justify-content: start; gap: .2rem 1ch; }
+      .menu button { text-align: left; }
+      #status { color: var(--muted); font-size: .8rem; min-height: 1.2em; }
       button { background: none; border: 0; color: var(--muted); cursor: pointer; padding: .25rem .5ch; font-size: .9rem; }
       button:hover { background: var(--accent); color: var(--bg); }
       button.primary { color: var(--accent); }
@@ -310,9 +356,17 @@
       #list { display: flex; flex-direction: column; gap: 1rem; }
       .block { border: 1px solid var(--line); }
       .block.off { opacity: .55; }
-      .bar { display: flex; align-items: center; gap: 1ch; padding: .3rem 1ch; border-bottom: 1px solid var(--line); background: var(--header); }
-      .bar .title { flex: 1; min-width: 6rem; background: transparent; color: var(--text); border: 0; font-weight: 600; font-size: .95rem; }
-      .bar .title:focus { outline: 1px solid var(--accent); }
+      .bar { display: flex; flex-wrap: wrap; align-items: center; gap: .2rem 1ch; padding: .3rem 1ch;
+             border-bottom: 1px solid var(--line); background: var(--header); cursor: pointer; user-select: none; }
+      .block.folded .bar { border-bottom: 0; }
+      .bar .head { flex: 1 1 12rem; min-width: 0; display: flex; align-items: center; gap: 1ch; }
+      .bar .fold { color: var(--accent); }
+      .bar .title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+                    color: var(--text); font-weight: 600; font-size: .95rem; }
+      .bar .title:focus-visible { outline: 1px solid var(--accent); }
+      .bar .title-edit { flex: 1; min-width: 0; background: var(--bg); color: var(--text); border: 0; outline: 1px solid var(--accent);
+                         font-weight: 600; font-size: .95rem; padding: .1rem .5ch; user-select: text; cursor: text; }
+      .bar .tools { display: flex; gap: .5ch; margin-left: auto; }
       input[type=checkbox] { accent-color: var(--accent); margin: 0; }
       textarea { display: block; width: 100%; height: 14rem; resize: vertical; margin: 0; padding: .6rem 1ch; border: 0;
                  background: var(--bg); color: var(--text); font-size: .9rem; line-height: 1.5; tab-size: 2; }
@@ -320,7 +374,9 @@
       #preview { border: 1px dashed var(--line); height: 18rem; color: var(--muted); }
       .empty { color: var(--muted); margin: 0; }
       .note { color: var(--muted); font-size: .8rem; margin: 0; line-height: 1.5; }
+      @media (max-width: 900px) { .menu { grid-template-columns: repeat(3, auto); } }
       @media (max-width: 600px) {
+        .menu { grid-template-columns: 1fr 1fr; }
         .win { width: 100%; height: 100%; border: 0; }
         header, main { padding-left: 1ch; padding-right: 1ch; }
       }
@@ -329,12 +385,14 @@
       <div class="win">
         <header>
           <h1>[ CSS 블록 관리 v${VERSION} ]</h1>
-          <button id="add">[+ 블록]</button>
-          <button id="import">[현재 CSS 가져오기]</button>
-          <button id="toggle-preview">[합친 결과 보기]</button>
-          <button id="restore">[이전 CSS 되돌리기]</button>
-          <button id="apply" class="primary">[적용]</button>
-          <button id="close">[닫기]</button>
+          <nav class="menu">
+            <button id="add">[+ 블록]</button>
+            <button id="import">[현재 CSS 가져오기]</button>
+            <button id="toggle-preview">[합친 결과 보기]</button>
+            <button id="restore">[이전 CSS 되돌리기]</button>
+            <button id="apply" class="primary">[적용]</button>
+            <button id="close">[닫기]</button>
+          </nav>
           <div id="status"></div>
         </header>
         <main>
