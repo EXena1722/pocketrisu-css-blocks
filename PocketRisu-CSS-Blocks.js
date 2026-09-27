@@ -1,7 +1,7 @@
 //@name pkr_css_blocks
-//@display-name CSS 블록 관리 v0.2.7
+//@display-name CSS 블록 관리 v0.2.8
 //@api 3.0
-//@version 0.2.7
+//@version 0.2.8
 //@update-url https://raw.githubusercontent.com/EXena1722/pocketrisu-css-blocks/main/PocketRisu-CSS-Blocks.js
 //@link https://github.com/EXena1722/pocketrisu-css-blocks 저장소
 
@@ -11,7 +11,7 @@
 
 (async () => {
   // Keep in sync with //@version and //@display-name above.
-  const VERSION = '0.2.7';
+  const VERSION = '0.2.8';
   const STORE_KEY = 'pkr_css_blocks_v1';
   const BACKUP_KEY = 'pkr_css_blocks_backup_v1';
 
@@ -257,7 +257,98 @@
       ta.addEventListener('input', () => { b.css = ta.value; markDirty(); });
       wrap.append(ta);
     }
-    return wrap;
+    // Drag handle: a separate strip left of the block.
+    const handle = document.createElement('div');
+    handle.className = 'handle';
+    handle.textContent = '≡';
+    handle.title = '끌어서 옮기기';
+    handle.addEventListener('pointerdown', (e) => startDrag(e, i));
+
+    const item = document.createElement('div');
+    item.className = 'item';
+    item.append(handle, wrap);
+    return item;
+  }
+
+  // Drag to reorder, with Pointer Events so touch works too (HTML5 drag and
+  // drop does not fire for touch on most phones). The drag starts after a
+  // small move, so a tap on the handle does nothing. While dragging, every
+  // block shows only its bar (without touching b.folded), a line marks the
+  // drop spot, and the list scrolls when the pointer nears its edges.
+  function startDrag(e, from) {
+    if (e.button !== 0) return;
+    e.preventDefault();
+    try { e.currentTarget.setPointerCapture(e.pointerId); } catch {}
+    const list = document.getElementById('list');
+    const main = document.querySelector('main');
+    const items = [...list.children];
+    const item = items[from];
+    const startY = e.clientY;
+    let dragging = false;
+    let y = startY;
+    let to = from;
+    let frame = 0;
+    const GAP = parseFloat(getComputedStyle(list).rowGap) || 0;
+    const line = document.createElement('div');
+    line.className = 'drop-line';
+
+    const place = () => {
+      to = items.length;
+      for (let k = 0; k < items.length; k++) {
+        const r = items[k].getBoundingClientRect();
+        if (y < r.top + r.height / 2) { to = k; break; }
+      }
+      // Absolutely placed in the gap between blocks, so it never shifts them.
+      const base = list.getBoundingClientRect().top;
+      const at = to < items.length
+        ? items[to].getBoundingClientRect().top - GAP / 2
+        : items[items.length - 1].getBoundingClientRect().bottom + GAP / 2;
+      line.style.top = `${at - base - 1}px`;
+      if (!line.isConnected) list.append(line);
+    };
+    const autoScroll = () => {
+      const r = main.getBoundingClientRect();
+      const edge = 48;
+      const speed = y < r.top + edge ? -(r.top + edge - y) : y > r.bottom - edge ? y - (r.bottom - edge) : 0;
+      if (speed) { main.scrollTop += Math.max(-24, Math.min(24, speed / 2)); place(); }
+      frame = requestAnimationFrame(autoScroll);
+    };
+    const begin = () => {
+      dragging = true;
+      // Collapse every block, then scroll so the dragged bar stays under the finger.
+      const before = item.getBoundingClientRect().top;
+      list.classList.add('dragging');
+      item.classList.add('lifted');
+      main.scrollTop += item.getBoundingClientRect().top - before;
+      place();
+      frame = requestAnimationFrame(autoScroll);
+    };
+    const move = (ev) => {
+      y = ev.clientY;
+      if (!dragging && Math.abs(y - startY) > 5) begin();
+      if (dragging) place();
+    };
+    const end = (ev) => {
+      document.removeEventListener('pointermove', move);
+      document.removeEventListener('pointerup', end);
+      document.removeEventListener('pointercancel', end);
+      if (!dragging) return;
+      cancelAnimationFrame(frame);
+      line.remove();
+      list.classList.remove('dragging');
+      item.classList.remove('lifted');
+      const target = to > from ? to - 1 : to;
+      if (ev.type === 'pointerup' && target !== from) {
+        blocks.splice(target, 0, blocks.splice(from, 1)[0]);
+        markDirty();
+        render();
+      }
+    };
+    // On the document, not the handle, so the release is seen even if the
+    // pointer capture is lost.
+    document.addEventListener('pointermove', move);
+    document.addEventListener('pointerup', end);
+    document.addEventListener('pointercancel', end);
   }
 
   function render() {
@@ -356,7 +447,18 @@
       button.danger { color: var(--red); }
       main { flex: 1; overflow-y: auto; padding: 1rem 2ch 1.5rem; display: flex; flex-direction: column; gap: 1rem; }
       #list { display: flex; flex-direction: column; gap: 1rem; }
-      .block { border: 1px solid var(--line); }
+      .item { display: flex; gap: .5ch; align-items: stretch; }
+      .block { flex: 1; min-width: 0; border: 1px solid var(--line); }
+      .handle { flex: none; width: 2.5ch; display: flex; justify-content: center; padding-top: .35rem;
+                border: 1px solid var(--line); background: var(--header); color: var(--accent);
+                cursor: grab; touch-action: none; user-select: none; }
+      .handle:hover { background: var(--accent); color: var(--bg); }
+      #list { position: relative; }
+      #list.dragging { cursor: grabbing; }
+      #list.dragging textarea { display: none; }
+      #list.dragging .bar { border-bottom: 0; }
+      .item.lifted { opacity: .5; }
+      .drop-line { position: absolute; left: 0; right: 0; height: 2px; background: var(--accent); pointer-events: none; }
       .block.off { opacity: .55; }
       .bar { display: flex; flex-wrap: wrap; align-items: center; gap: .2rem 1ch; padding: .3rem 1ch;
              border-bottom: 1px solid var(--line); background: var(--header); cursor: pointer; user-select: none; }
